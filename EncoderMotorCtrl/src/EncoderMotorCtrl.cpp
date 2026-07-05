@@ -115,22 +115,38 @@ void EncoderMotorCtrl::setup_v2(int dir, int pwm, int gpioA, int gpioB, pcnt_uni
     pwm_pin = pwm;
     UNIT = pcnt_unit;
 
-    pcnt_config_t pcnt_conf = {
+    pcnt_config_t pcnt_confA = {
 
         .pulse_gpio_num = gpioA,
         .ctrl_gpio_num = gpioB,
+        .lctrl_mode = PCNT_MODE_REVERSE,
         .hctrl_mode = PCNT_MODE_KEEP,
         .pos_mode = PCNT_COUNT_INC,
-        .neg_mode = PCNT_COUNT_DIS,
+        .neg_mode = PCNT_COUNT_DEC,
         .counter_h_lim = 32767,
         .counter_l_lim = -32767,
         .unit = pcnt_unit,
         .channel = PCNT_CHANNEL_0,
     };
 
-    pcnt_unit_config(&pcnt_conf);
+    pcnt_config_t pcnt_confB = {
 
-    pcnt_set_filter_value(pcnt_unit, 1023); // 指定したクロック以下のパルスを無視
+        .pulse_gpio_num = gpioB,
+        .ctrl_gpio_num = gpioA,
+        .lctrl_mode = PCNT_MODE_KEEP,
+        .hctrl_mode = PCNT_MODE_REVERSE,
+        .pos_mode = PCNT_COUNT_INC,
+        .neg_mode = PCNT_COUNT_DEC,
+        .counter_h_lim = 32767,
+        .counter_l_lim = -32767,
+        .unit = pcnt_unit,
+        .channel = PCNT_CHANNEL_1,
+    };
+
+    pcnt_unit_config(&pcnt_confA);
+    pcnt_unit_config(&pcnt_confB);
+
+    pcnt_set_filter_value(pcnt_unit, 100); // 指定したクロック以下のパルスを無視
     pcnt_filter_enable(pcnt_unit);
 
     pcnt_counter_pause(pcnt_unit);
@@ -217,6 +233,13 @@ void EncoderMotorCtrl::set_speed(int speed)
 
     if (!speed_ctrl_running)
     {
+        target_speed = speed;
+        xTaskCreate(speed_ctrl_task, "speed_ctrl_task", 2048, this, 1, &speed_ctrl_handle);
+        speed_ctrl_running = true;
+    }
+    else if (speed_ctrl_running)
+    {
+        stop_set_speed();
         target_speed = speed;
         xTaskCreate(speed_ctrl_task, "speed_ctrl_task", 2048, this, 1, &speed_ctrl_handle);
         speed_ctrl_running = true;
